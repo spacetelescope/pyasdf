@@ -19,18 +19,18 @@ __all__ = [
 ]
 
 try:
-    import yaml as _
-except ImportError:
-    raise ImportError("asdf requires pyyaml")
+    import ruamel.yaml as _
+except ImportError: # pragma: no cover
+    raise ImportError("asdf requires ruamel.yaml")
 
 try:
     import jsonschema as _
-except ImportError:
+except ImportError: # pragma: no cover
     raise ImportError("asdf requires jsonschema")
 
 try:
     import numpy as _
-except ImportError:
+except ImportError: # pragma: no cover
     raise ImportError("asdf requires numpy")
 
 from .asdf import AsdfFile, open_asdf
