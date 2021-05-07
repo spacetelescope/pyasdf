@@ -170,6 +170,7 @@ def test_table_inline(tmpdir):
         tree = yaml.safe_load(
             re.sub(br'!core/\S+', b'', content))
 
+        del tree['table_data']['_description']
         assert tree['table_data'] == {
             'datatype': [
                 {'datatype': 'int8', 'name': 'MINE'},
@@ -225,6 +226,7 @@ def test_table(tmpdir):
         tree = yaml.safe_load(
             re.sub(br'!core/\S+', b'', content))
 
+        del tree['table_data']['_description']
         assert tree['table_data'] == {
             'datatype': [
                 {'byteorder': 'big', 'datatype': 'int8', 'name': 'MINE'},
@@ -251,6 +253,7 @@ def test_table_nested_fields(tmpdir):
         tree = yaml.safe_load(
             re.sub(br'!core/\S+', b'', content))
 
+        del tree['table_data']['_description']
         assert tree['table_data'] == {
             'datatype': [
                 {'datatype': 'int64', 'name': 'A', 'byteorder': 'little'},
