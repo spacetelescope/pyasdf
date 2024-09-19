@@ -1,10 +1,39 @@
+"""
+To replace the plugin we should have a way to take a directory,
+crawl it for all "yaml" files (or "yml"), for each one:
+    - load it (current plugin resolves references)
+    - checks it (with option to check defaults)
+    - runs the examples
+
+So maybe
+
+@pytest.mark.parametrize("schema", asdf.testing.helpers.collect_schemas(SCHEMA_DIRECTORY))
+def test_schema(schema):
+    asdf.schema.check_schema(schema, validate_defaults=True)
+    asdf.testing.helpers.test_examples(schema)
+
+This differs from the plugin in that the examples and schema check all occur in the same
+test. Maybe also make a collect_examples(SCHEMA_DIRECTORY). The examples are kind of a mess
+so it might be nice to separate those anyway.
+
+There are some additional checks that we might consider adding:
+    - check that schema URI matches ID used to register schema
+    - only check schemas registered with asdf (instead of loading them directly)
+    - check that all schemas on disk can be found in asdf (and it's one-to-one)
+    - test manifests (see common integration tests, validate against manifest schema, check that asdf
+      is aware of the manifest, check that schemas in manifest are registered)
+
+asdf-standard has a LOT more testing but I'm not sure if any of it is generally
+useful. For now, maybe the following is a good target:
+    - Recursively crawl a resources directory for files: pathlib.Path("resources").rglob("*.yaml")
+"""
+
 import io
 import os
 import pathlib
 import warnings
 from dataclasses import dataclass
 
-import numpy as np
 import pytest
 import yaml
 
@@ -12,42 +41,55 @@ import yaml
 
 
 def pytest_addoption(parser):
+    # sort of base option
     parser.addini("asdf_schema_root", "Root path indicating where schemas are stored")
-    parser.addini("asdf_schema_skip_names", "Base names of files to skip in schema tests")
-    parser.addini(
+    # unused
+    parser.addini("asdf_schema_skip_names", "Base names of files to skip in schema tests")  # unused
+    # can this be done with pytest directly
+    parser.addini(  # asdf-standard
         "asdf_schema_skip_tests",
         "List of tests to skip, one per line, in format <schema path suffix>::<test name>",
     )
-    parser.addini(
+    # unused, probably better to add an xfail (or skip) via pytest
+    parser.addini(  # unused
         "asdf_schema_xfail_tests",
         "List of tests to xfail, one per line, in format <schema path suffix>::<test name>",
     )
-    parser.addini("asdf_schema_skip_examples", "Base names of schemas whose examples should not be tested")
+    # this is unused, remove it
+    parser.addini("asdf_schema_skip_examples", "Base names of schemas whose examples should not be tested")  # unused
+    # this is the base option and required
     parser.addini(
         "asdf_schema_tests_enabled",
         "Controls whether schema tests are enabled by default",
         type="bool",
         default=False,
     )
-    parser.addini(
+    # this is passed through as an option to asdf.schema.check_schema which is
+    # part of the schema checking (in addition to running examples). I think for now
+    # we keep this as an option.
+    parser.addini(  # jwst, romancal and stdatamodels set this to False
         "asdf_schema_validate_default",
         "Set to true to enable validation of the schema 'default' property",
         type="bool",
         default=True,
     )
-    parser.addini(
+    # the following can be handled with a warning filter
+    parser.addini(  # asdf-standard and asdf-transform-schemas set this to True
         "asdf_schema_ignore_unrecognized_tag",
         "Set to true to disable warnings when tag serializers are missing",
         type="bool",
         default=False,
     )
-    parser.addini(
+    # same, use a warning filter
+    parser.addini(  # unused
         "asdf_schema_ignore_version_mismatch",
         "Set to true to disable warnings when missing explicit support for a tag",
         type="string",
         default="",
     )
-    parser.addoption("--asdf-tests", action="store_true", help="Enable ASDF schema tests")
+    parser.addoption(
+        "--asdf-tests", action="store_true", help="Enable ASDF schema tests"
+    )  # might be used by asdf for weldx tests
 
 
 class AsdfSchemaFile(pytest.File):
@@ -206,7 +248,7 @@ class AsdfSchemaExampleItem(pytest.Item):
         return result
 
     def runtest(self):
-        from asdf import AsdfFile, _block, generic_io
+        from asdf import AsdfFile
         from asdf.testing import helpers
 
         # Make sure that the examples in the schema files (and thus the
@@ -218,18 +260,18 @@ class AsdfSchemaExampleItem(pytest.Item):
             ignore_unrecognized_tag=self.ignore_unrecognized_tag,
         )
 
-        # Fake an external file
-        ff2 = AsdfFile({"data": np.empty((1024 * 1024 * 8), dtype=np.uint8)})
+        # # Fake an external file
+        # ff2 = AsdfFile({"data": np.empty((1024 * 1024 * 8), dtype=np.uint8)})
 
-        ff._external_asdf_by_uri[
-            (pathlib.Path(self.filename).expanduser().absolute().parent / "external.asdf").as_uri()
-        ] = ff2
+        # ff._external_asdf_by_uri[
+        #     (pathlib.Path(self.filename).expanduser().absolute().parent / "external.asdf").as_uri()
+        # ] = ff2
 
-        wb = _block.writer.WriteBlock(np.zeros(1024 * 1024 * 8, dtype=np.uint8))
-        with generic_io.get_file(buff, mode="rw") as f:
-            f.seek(0, 2)
-            _block.writer.write_blocks(f, [wb, wb], streamed_block=wb)
-            f.seek(0)
+        # wb = _block.writer.WriteBlock(np.zeros(1024 * 1024 * 8, dtype=np.uint8))
+        # with generic_io.get_file(buff, mode="rw") as f:
+        #     f.seek(0, 2)
+        #     _block.writer.write_blocks(f, [wb, wb], streamed_block=wb)
+        #     f.seek(0)
 
         try:
             ff._open_impl(ff, buff, mode="rw")
